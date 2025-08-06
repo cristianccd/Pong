@@ -1,0 +1,1379 @@
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 1
+v1.ASM
+
+
+
+      1
+      2				     .286
+      3				     ;-------------------------------------------------------------------------
+      4
+      5	0000			     STACKSG SEGMENT
+      6
+      7	0000  0FFF*(0000)		     PILA DW 0FFFH DUP(0)
+      8
+      9	1FFE			     STACKSG ENDS
+     10
+     11				     ;-------------------------------------------------------------------------
+     12
+     13	0000			     DATASG SEGMENT
+     14
+     15				     ;Variables
+     16
+     17	0000  00		     MAS_SLA	     DB	     0;MASTER=0, SLAVE=1
+     18				     ;POSICIONES
+     19	0001  28		     PELX	     DB	     40
+     20	0002  0C		     PELY	     DB	     12
+     21	0003  0C		     MASY	     DB	     12
+     22	0004  0C		     SLAY	     DB	     12
+     23	0005  00		     FILA	     DB	     0
+     24	0006  00		     COL		     DB	     0
+     25	0007  00		     SCRMAS	     DB	     0
+     26	0008  00		     SCRSLV	     DB	     0
+     27				     ;VARIOS
+     28	0009  00		     ESTADO	     DB	     0
+     29	000A  01		     DIR		     DB	     1
+     30	000B  00		     CONT	     DB	     0
+     31	000C  30		     PUNTM	     DB	     48
+     32	000D  30		     PUNTS	     DB	     48
+     33	000E  00		     GAMEO	     DB	     0
+     34				     ;CHAR
+     35	000F  00		     CAR		     DB	     0
+     36	0010  00		     ASC		     DB	     0
+     37	0011  07		     C_PEL	     DB	     7
+     38	0012  B0		     C_JUG1	     DB	     176
+     39	0013  B2		     C_JUG2	     DB	     178
+     40	0014  00		     C_BORR	     DB	     0
+     41	0015  00		     TECLA	     DB	     0
+     42	0016  00		     DATO	     DB	     0
+     43
+     44	0017  6F 62 73 74 61 2E	74+  FileName	     DB		     "obsta.txt",0
+     45	      78 74 00
+     46	0021  0000		     FileHandle	     DW		     0
+     47	0023  51*(00)		     Buffer	     DB	     81	     DUP(0)
+     48	0074  0000		     BytesRead	     DW	     0
+     49	0076  00000000		     FileSize	     DD	     0
+     50
+     51	      =03F8		     COM1	     EQU     3F8H
+     52	      =03FB		     LCR	     EQU     3FBH	     ;Line control register
+     53	      =03FD		     LSR	     EQU     3FDH	     ;Line status register
+     54	      =03FA		     FCR	     EQU     3FAH	     ;FIFO CONTROL REGISTER
+     55	      =03FA		     IIR	     EQU     3FAH	     ;INTERRUPT	IDENT REGISTER
+     56	      =03F9		     IER	     EQU     3F9H	     ;INTERRUPT	ENABLE REGISTER
+     57	      =03FC		     MCR	     EQU     3FCH	     ;MODEM CONTROL REGISTER
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 2
+v1.ASM
+
+
+
+     58
+     59	      =0020		     PIC	     EQU     20H	     ;PROGRAMMABLE INTERRUPT CONTROLLER
+     60
+     61
+     62				     ;STRING
+     63	007A  20 4D 41 53 20 30	20+  PUNT	     DB	     ' MAS 0 - SLV 0 $'
+     64	      2D 20 53 4C 56 20	30+
+     65	      20 24
+     66	008A  4D 41 53 54 45 52	24   MSG1	     DB	     'MASTER$'
+     67	0091  53 4C 41 56 45 24	     MSG2	     DB	     'SLAVE$'
+     68	0097  20 2D 2D 47 41 4D	45+  MSG3	     DB	     ' --GAME OVER!-- $'
+     69	      20 4F 56 45 52 21	2D+
+     70	      2D 20 24
+     71	00A8  47 41 4E 4F 20 20	24   MSG4	     DB	     'GANO  $'
+     72	00AF  45 52 52 4F 52 20	41+  MSG5	     DB	     'ERROR AL CARGAR EL ARCHIVO! $'
+     73	      4C 20 43 41 52 47	41+
+     74	      52 20 45 4C 20 41	52+
+     75	      43 48 49 56 4F 21	20+
+     76	      24
+     77	00CC			     DATASG ENDS
+     78
+     79				     ;-------------------------------------------------------------------
+     80
+     81	0000			     CODESG  SEGMENT
+     82
+     83	0000			     BEGIN PROC
+     84
+     85					     ASSUME SS:STACKSG,DS:DATASG,CS:CODESG
+     86	0000  B8 0000s			     MOV AX,DATASG ;Obtiene dirección de segmento de datos
+     87	0003  8E D8			     MOV DS,AX ;Se lo carga en DS
+     88	0005  B8 B800			     MOV AX,0B800H
+     89	0008  8E C0			     MOV ES,AX ;SEGMENTO PANTALLA
+     90	000A  BF 0000			     MOV DI,0
+     91
+     92	000D			     INICIO:
+     93	000D  E8 0223			     CALL    CLRSCR
+     94	0010  E8 0266			     CALL    OBSTA
+     95	0013  E8 0192			     CALL    OPENPORT
+     96	0016  E8 02CD			     CALL    GUI
+     97	0019  E8 03D8			     CALL    PRINTPEL
+     98	001C  E8 02FC			     CALL    PRINTMAS
+     99	001F  E8 032A			     CALL    PRINTSLV
+    100	0022			     BUCLE:
+    101	0022  80 3E 000Er 01		     CMP	     GAMEO,1
+    102	0027  75 03			     JNE	     S4
+    103	0029  E9 0083			     JMP	     SALIR
+    104	002C			     S4:
+    105	002C  E8 01F7			     CALL    DELAY
+    106	002F  80 3E 0000r 00		     CMP	     MAS_SLA,0
+    107	0034  75 13			     JNZ	     S2
+    108	0036  80 3E 0009r 01		     CMP	     ESTADO,1
+    109	003B  75 0C			     JNE	     S2
+    110	003D  E8 01E6			     CALL    DELAY
+    111	0040  E8 01E3			     CALL    DELAY
+    112	0043  E8 01E0			     CALL    DELAY
+    113	0046  E8 0493			     CALL    MOVPEL
+    114	0049			     S2:
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 3
+v1.ASM
+
+
+
+    115	0049  E8 0072			     CALL    READPORT
+    116	004C  B4 01			     MOV     AH,01
+    117	004E  CD 16			     INT     16h
+    118	0050  74 D0			     JZ		     BUCLE
+    119
+    120				     ;SI NO HAY	CARACTER
+    121	0052  B4 00			     MOV	     AH,0	     ;SACA LA TECLA DEL	BUFFER
+    122	0054  CD 16			     INT     16H
+    123	0056  A2 0010r			     MOV	     ASC,AL
+    124	0059  88 26 0015r		     MOV	     TECLA,AH
+    125
+    126	005D  80 3E 0009r 00		     CMP	     ESTADO,0
+    127	0062  75 11			     JNE	     ESTADO1
+    128	0064  80 3E 0010r 63		     CMP	     ASC,'c'
+    129	0069  75 B7			     JNE	     BUCLE
+    130	006B  C6 06 0016r 63		     MOV	     DATO,'c'
+    131	0070  E8 0147			     CALL    WRITEPORT
+    132					     ;SI LEO UNA C MANDO POR EL	PUERTO
+    133	0073  EB AD			     JMP	     BUCLE
+    134	0075			     ESTADO1:
+    135	0075  80 3E 0009r 01		     CMP	     ESTADO,1
+    136	007A  75 29			     JNE	     ESTADO2
+    137	007C  80 3E 0000r 00		     CMP	     MAS_SLA,0
+    138	0081  74 03			     JE		     MOV_MAS
+    139	0083  EB 0A 90			     JMP	     MOV_SLV
+    140
+    141	0086			     MOV_MAS:
+    142	0086  E8 03AE			     CALL    MOVMAS
+    143	0089  E8 040B			     CALL    TXMAS
+    144	008C  EB 0A 90			     JMP	     FINESTADO1
+    145	008F			     MOV_SLV:
+    146	008F  E8 03D5			     CALL    MOVSLV
+    147	0092  E8 0416			     CALL    TXSLA
+    148	0095  EB 01 90			     JMP	     FINESTADO1
+    149	0098			     FINESTADO1:
+    150	0098  E8 0315			     CALL    REFRESH
+    151	009B  80 3E 0010r 71		     CMP	     ASC,'q'
+    152	00A0  74 0D			     JE		     SALIR
+    153	00A2  E9 FF7D			     JMP	     BUCLE
+    154	00A5			     ESTADO2:
+    155	00A5  80 3E 0010r 71		     CMP	     ASC,'q'
+    156	00AA  74 03			     JE		     SALIR
+    157	00AC  E9 FF73			     JMP	     BUCLE
+    158	00AF			     SALIR:
+    159	00AF  E8 0148			     CALL    GETKEY
+    160	00B2  80 3E 0010r 71		     CMP	     ASC,'q'
+    161	00B7  75 F6			     JNE	     SALIR
+    162	00B9  B8 4C00			     MOV     AX,4C00H
+    163	00BC  CD 21			     INT     21H
+    164	00BE				     BEGIN ENDP
+    165
+    166				     ;-------------------------------------------------------------------
+    167	00BE			     READPORT PROC
+    168	00BE  60			     PUSHA
+    169
+    170	00BF  BA 03FD			     MOV     DX,LSR
+    171	00C2  EC			     IN	     AL,DX
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 4
+v1.ASM
+
+
+
+    172	00C3  24 01			     AND     AL,1
+    173	00C5  75 03			     JNZ     S1
+    174	00C7  E9 00DC			     JMP     FINREADP	     ;NO HAY NADA
+    175	00CA			     S1:
+    176	00CA  BA 03F8			     MOV     DX,COM1
+    177	00CD  EC			     IN	     AL,DX   ;LEO EL DATO
+    178	00CE  A2 0016r			     MOV     DATO,AL
+    179
+    180					     ;VERIFICO SI RECIBI UNA C
+    181	00D1  80 3E 0009r 00		     CMP     ESTADO,0
+    182				     ;RECIBI C?
+    183	00D6  75 33			     JNE     EST1
+    184	00D8  80 3E 0016r 63		     CMP     DATO,'c'
+    185	00DD  74 17			     JE	     SOYSLV
+    186				     ;RECIBI A?
+    187	00DF  80 3E 0016r 61		     CMP     DATO,'a'
+    188	00E4  74 03			     JE	     SOYMAS
+    189	00E6  E9 00BD			     JMP     FINREADP
+    190
+    191
+    192	00E9			     SOYMAS:
+    193	00E9  C6 06 0000r 00		     MOV	     MAS_SLA,0;MASTER
+    194	00EE  C6 06 0009r 01		     MOV	     ESTADO,1
+    195	00F3  E9 00B0			     JMP     FINREADP
+    196
+    197	00F6			     SOYSLV:
+    198	00F6  C6 06 0000r 01		     MOV	     MAS_SLA,1;SLV
+    199	00FB  C6 06 0016r 61		     MOV	     DATO,'a'
+    200	0100  E8 00B7			     CALL    WRITEPORT
+    201	0103  C6 06 0009r 01		     MOV	     ESTADO,1
+    202	0108  E9 009B			     JMP	     FINREADP
+    203
+    204	010B			     EST1:
+    205	010B  80 3E 0009r 01		     CMP	     ESTADO,1
+    206	0110  75 12			     JNE	     EST2
+    207	0112  80 3E 0016r 6D		     CMP	     DATO,'m'
+    208	0117  74 03			     JE		     FINEST1
+    209	0119  EB 3C 90			     JMP	     EST3
+    210					     ;TENGO QUE	RECIBIR	LA M
+    211					     ;SI RECIBI	LA M, REFRESH
+    212	011C			     FINEST1:
+    213					     ;CAMBIO EL	ESTADO A 2
+    214	011C  C6 06 0009r 02		     MOV	     ESTADO,2
+    215	0121  E9 0082			     JMP	     FINREADP
+    216	0124			     EST2:
+    217	0124  80 3E 0009r 02		     CMP	     ESTADO,2
+    218	0129  75 2C			     JNE	     EST3
+    219	012B  80 3E 0000r 00		     CMP	     MAS_SLA,0
+    220	0130  74 03			     JE		     EST2_MAS
+    221	0132  EB 12 90			     JMP	     EST2_SLV
+    222	0135			     EST2_MAS:
+    223	0135  A0 0016r			     MOV	     AL,DATO
+    224	0138  A2 0004r			     MOV	     SLAY,AL
+    225	013B  E8 0272			     CALL    REFRESH
+    226	013E  C6 06 0009r 01		     MOV	     ESTADO,1
+    227	0143  EB 61 90			     JMP	     FINREADP
+    228	0146			     EST2_SLV:
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 5
+v1.ASM
+
+
+
+    229	0146  A0 0016r			     MOV	     AL,DATO
+    230	0149  A2 0003r			     MOV	     MASY,AL
+    231	014C  E8 0261			     CALL    REFRESH
+    232	014F  C6 06 0009r 01		     MOV	     ESTADO,1
+    233	0154  EB 50 90			     JMP	     FINREADP
+    234	0157			     EST3:
+    235	0157  80 3E 0009r 01		     CMP	     ESTADO,1
+    236	015C  75 15			     JNE	     EST4
+    237	015E  80 3E 0016r 70		     CMP	     DATO,'p'
+    238	0163  74 03			     JE		     FINEST3
+    239	0165  EB 3F 90			     JMP	     FINREADP
+    240	0168			     FINEST3:
+    241	0168  E8 02AE			     CALL    BORRPEL
+    242	016B  C6 06 0009r 04		     MOV	     ESTADO,4
+    243	0170  EB 34 90			     JMP	     FINREADP
+    244	0173			     EST4:
+    245	0173  80 3E 0009r 04		     CMP	     ESTADO,4
+    246	0178  75 0E			     JNE	     EST5
+    247	017A  A0 0016r			     MOV	     AL,DATO
+    248	017D  A2 0001r			     MOV	     PELX,AL
+    249	0180  C6 06 0009r 05		     MOV	     ESTADO,5
+    250	0185  EB 1F 90			     JMP	     FINREADP
+    251	0188			     EST5:
+    252	0188  80 3E 0009r 05		     CMP	     ESTADO,5
+    253	018D  75 17			     JNE	     FINREADP
+    254	018F  A0 0016r			     MOV	     AL,DATO
+    255	0192  A2 0002r			     MOV	     PELY,AL
+    256	0195  C6 06 0009r 01		     MOV	     ESTADO,1
+    257	019A  E8 0257			     CALL    PRINTPEL
+    258					     ;CMP	     PELX,79
+    259					     ;JE	     REF
+    260					     ;CMP	     PELX,1
+    261					     ;JE	     REF
+    262					     ;JMP	     FINEST5
+    263	019D			     REF:
+    264	019D  E8 0210			     CALL    REFRESH
+    265	01A0			     FINEST5:
+    266	01A0  E8 055F			     CALL    SCORE
+    267	01A3  EB 01 90			     JMP	     FINREADP
+    268
+    269	01A6			     FINREADP:
+    270	01A6  61			     POPA
+    271	01A7  C3			     RET
+    272	01A8			     READPORT ENDP
+    273				     ;-------------------------------------------------------------------
+    274	01A8			     OPENPORT PROC
+    275	01A8  60			     PUSHA
+    276	01A9  B4 00			     MOV     AH,00H
+    277	01AB  B0 EA			     MOV     AL,11101010B    ;111->9600	baudios,01->paridad impar
+    278											     ;0->1 bit de stop,	10->7 bits de datos
+    279	01AD  BA 0000			 MOV	 DX,0		 ;COM 1
+    280	01B0  CD 14			     INT     14H
+    281	01B2  BA 03FA			     MOV     DX,FCR
+    282	01B5  B0 07			     MOV     AL,00000111B
+    283	01B7  EE			     OUT     DX,AL	     ;SETEO LA FIFO
+    284	01B8  61			     POPA
+    285	01B9  C3			     RET
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 6
+v1.ASM
+
+
+
+    286	01BA			     OPENPORT ENDP
+    287				     ;-------------------------------------------------------------------
+    288	01BA			     WRITEPORT PROC NEAR
+    289	01BA  60			     PUSHA
+    290	01BB  BA 03F8			 MOV	 DX,COM1
+    291	01BE  A0 0016r			     MOV	     AL,DATO
+    292	01C1  EE			     OUT     DX,AL
+    293	01C2  BA 03FD			 MOV	 DX,LSR
+    294	01C5  EC			     IN		     AL,DX
+    295	01C6			     WRITEP:
+    296	01C6  24 40			     AND	     AL,01000000b
+    297	01C8  74 FC			     JZ		     WRITEP
+    298
+    299	01CA  61			     POPA
+    300	01CB  C3			     RET
+    301	01CC			     WRITEPORT ENDP
+    302
+    303				     ;-------------------------------------------------------------------
+    304				     ;PROCEDURES
+    305				     ;SETCUR POSICIONA EL CURSOR DE PANTALLA EN	DH = FILA, DL =	COLUMNA
+    306
+    307	01CC			     SETCUR PROC
+    308
+    309	01CC  60			     PUSHA
+    310	01CD  B4 02			     MOV AH,02H
+    311	01CF  B7 00			     MOV BH,0
+    312	01D1  8A 36 0005r		     MOV DH,FILA
+    313	01D5  8A 16 0006r		     MOV DL,COL
+    314	01D9  CD 10			     INT 10H
+    315	01DB  61			     POPA
+    316	01DC  C3			     RET
+    317
+    318	01DD			     SETCUR ENDP
+    319
+    320				     ;-------------------------------------------------------------------
+    321				     ;WRITE ESCRIBE CARACTER EN	PANTALLA AL = character	to display.
+    322
+    323	01DD			     WRITE PROC
+    324
+    325	01DD  60			     PUSHA
+    326	01DE  B4 0A			     MOV AH,0AH
+    327	01E0  B7 00			     MOV BH,0
+    328	01E2  A0 000Fr			     MOV AL,CAR
+    329	01E5  B9 0001			     MOV CX,1
+    330	01E8  CD 10			     INT 10H
+    331	01EA  61			     POPA
+    332	01EB  C3			     RET
+    333
+    334
+    335	01EC			     WRITE ENDP
+    336				     ;-------------------------------------------------------------------
+    337				     ;WRITE ESCRIBE CARACTER EN	PANTALLA AL = character	to display.
+    338
+    339	01EC			     BORRAR PROC
+    340
+    341	01EC  60			     PUSHA
+    342	01ED  B4 0A			     MOV AH,0AH
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 7
+v1.ASM
+
+
+
+    343	01EF  B7 00			     MOV BH,0
+    344	01F1  B0 20			     MOV AL,' '
+    345	01F3  B9 0001			     MOV CX,1
+    346	01F6  CD 10			     INT 10H
+    347	01F8  61			     POPA
+    348	01F9  C3			     RET
+    349
+    350	01FA			     BORRAR ENDP
+    351
+    352				     ;-------------------------------------------------------------------
+    353
+    354				     ;GETKEY TOMA UNA TECLA AH = BIOS scan code, AL = ASCII character
+    355				     ;BORRA BUFFER.
+    356
+    357	01FA			     GETKEY PROC
+    358
+    359	01FA  60			     PUSHA
+    360	01FB  B4 01			     MOV     AH,1
+    361	01FD  CD 16			     INT     16H
+    362	01FF  75 0B			     JNZ	     FINGETKEY
+    363	0201  B4 00			     MOV     AH,0
+    364	0203  CD 16			     INT     16H
+    365	0205  88 26 0015r		     MOV     TECLA,AH
+    366	0209  A2 0010r			     MOV     ASC,AL
+    367	020C			     FINGETKEY:
+    368	020C  61			     POPA
+    369	020D  C3			     RET
+    370
+    371	020E			     GETKEY ENDP
+    372				     ;-------------------------------------------------------------------
+    373	020E			     WAITKEY PROC
+    374	020E  60			     PUSHA
+    375	020F  B4 00			     MOV     AH,0
+    376	0211  CD 16			     INT     16H
+    377	0213  88 26 0015r		     MOV     TECLA,AH
+    378	0217  A2 0010r			     MOV     ASC,AL
+    379	021A			     FINWAITKEY:
+    380	021A  61			     POPA
+    381	021B  C3			     RET
+    382
+    383	021C			     WAITKEY ENDP
+    384
+    385
+    386				     ;-------------------------------------------------------------------
+    387	021C			     READCHAR PROC
+    388	021C  60			     PUSHA
+    389	021D  B4 08			     MOV     AH,08
+    390	021F  CD 10			     INT     10H
+    391	0221  A2 0010r			     MOV     ASC,AL
+    392	0224			     FINREADCHAR:
+    393	0224  61			     POPA
+    394	0225  C3			     RET
+    395
+    396	0226			     READCHAR ENDP
+    397				     ;-------------------------------------------------------------------
+    398	0226			     DELAY PROC
+    399	0226  BB 01FF			     MOV	     BX,01FFH
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 8
+v1.ASM
+
+
+
+    400	0229			     B1:
+    401	0229  B8 FFFF			     MOV	     AX,0FFFFH
+    402	022C			     B2:
+    403	022C  48			     DEC	     AX
+    404	022D  75 FD			     JNZ	     B2
+    405	022F			     B3:
+    406	022F  4B			     DEC	     BX
+    407	0230  75 F7			     JNZ	     B1
+    408	0232  C3			     RET
+    409	0233			     DELAY ENDP
+    410				     ;--------------------------------------------------------------------
+    411
+    412	0233			     CLRSCR PROC
+    413
+    414	0233  C6 06 0005r 00		     MOV     FILA,0
+    415	0238  C6 06 0006r 00		     MOV     COL,0
+    416	023D  C6 06 000Fr 20		     MOV     CAR,' '
+    417	0242			     BORR:
+    418	0242  8A 36 0005r		     MOV     DH,FILA
+    419	0246  8A 16 0006r		     MOV     DL,COL
+    420	024A  E8 FF7F			     CALL    SETCUR
+    421	024D  E8 FF8D			     CALL    WRITE
+    422	0250  FE 06 0006r		     INC     COL
+    423	0254  80 3E 0006r 50		     CMP     COL,80
+    424	0259  7C E7			     JL	     BORR
+    425	025B  C6 06 0006r 00		     MOV     COL,0
+    426	0260  FE 06 0005r		     INC     FILA
+    427	0264  80 3E 0005r 18		     CMP     FILA,24
+    428	0269  7C D7			     JL	     BORR
+    429	026B  C6 06 0005r 00		     MOV     FILA,0
+    430	0270  C6 06 0006r 00		     MOV     COL,0
+    431	0275  E8 FF54			     CALL    SETCUR
+    432	0278  C3			     RET
+    433
+    434	0279			     CLRSCR ENDP
+    435				     ;-------------------------------------------------------------------
+    436	0279			     OBSTA   PROC
+    437	0279  60			     PUSHA
+    438	027A  B8 3D00			     MOV	     AX,3D00H	     ;READ ONLY
+    439	027D  BA 0017r			     MOV     DX,offset FileName
+    440	0280  CD 21			     INT	 21H
+    441	0282  A3 0021r			     MOV     [FileHandle],AX
+    442	0285  72 49			     JC		     FINOBSTAERR     ;ERROR
+    443	0287  C6 06 0005r 00		     MOV	     FILA,0
+    444	028C  C6 06 0006r 00		     MOV	     COL,0
+    445	0291  E8 FF38			     CALL    SETCUR
+    446	0294			     LEO:
+    447	0294  A1 0074r			     MOV	     AX,[BytesRead]
+    448	0297  8B 1E 0021r		     MOV     bx,[FileHandle]
+    449	029B  BA 0023r			 MOV	 dx,offset buffer
+    450	029E  B4 3F			     MOV     ah,3Fh
+    451	02A0  B9 0050			 MOV	 cx,80
+    452	02A3  CD 21			 INT	 21h
+    453
+    454	02A5  BE 0050			     MOV     SI,80
+    455	02A8  B0 24			     MOV	     AL,'$'
+    456	02AA  BB 0023r			 LEA	     BX,buffer
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 9
+v1.ASM
+
+
+
+    457	02AD  88 00			 MOV	     BX[SI],AL	 ;EN AL	TENGO EL ELEMENTO SI
+    458
+    459	02AF  BA 0023r			     LEA	     DX,BUFFER
+    460	02B2  B4 09			     MOV	     AH,9H
+    461	02B4  CD 21			     INT	     21H
+    462	02B6  FE 06 0005r		     INC	     FILA
+    463	02BA  80 3E 0005r 19		     CMP	     FILA,25
+    464	02BF  75 D3			     JNE	     LEO
+    465	02C1  72 0D			     JC		     FINOBSTAERR     ;ERROR
+    466
+    467	02C3			     FINLEO:
+    468	02C3  8B 1E 0021r		     MOV     BX,[FileHandle]
+    469	02C7  B4 3E			 MOV	 AH,3EH
+    470	02C9  CD 21			 INT	 21H
+    471	02CB  72 03			     JC		     FINOBSTAERR     ;ERROR
+    472	02CD  EB 08 90			     JMP	     FINOBSTA
+    473
+    474	02D0			     FINOBSTAERR:
+    475	02D0  BA 00AFr			     LEA	     DX,MSG5
+    476	02D3  B4 09			     MOV	     AH,9H
+    477	02D5  CD 21			     INT	     21H
+    478
+    479	02D7			     FINOBSTA:
+    480	02D7  C6 06 0005r 00		     MOV	     FILA,0
+    481	02DC  C6 06 0006r 00		     MOV	     COL,0
+    482	02E1  E8 FEE8			     CALL    SETCUR
+    483	02E4  61			     POPA
+    484	02E5  C3			     RET
+    485
+    486	02E6			     OBSTA   ENDP
+    487				     ;-------------------------------------------------------------------
+    488
+    489	02E6			     GUI PROC
+    490	02E6  C6 06 0006r 00		     MOV     COL,0
+    491	02EB  C6 06 0005r 00		     MOV     FILA,0
+    492	02F0			     MARCOSUP:
+    493	02F0  C6 06 000Fr CD		     MOV     CAR,205
+    494	02F5  E8 FED4			     CALL    SETCUR
+    495	02F8  E8 FEE2			     CALL    WRITE
+    496	02FB  FE 06 0006r		     INC     COL
+    497	02FF  80 3E 0006r 50		     CMP     COL,80
+    498	0304  75 EA			     JNE     MARCOSUP
+    499	0306			     CENTRO:
+    500	0306  C6 06 0006r 23		     MOV     COL,35
+    501	030B  C6 06 0005r 00		     MOV     FILA,0
+    502	0310  E8 FEB9			     CALL    SETCUR
+    503	0313  BA 007Ar			     LEA     DX,PUNT
+    504	0316  B4 09			     MOV     AH,9H
+    505	0318  CD 21			     INT     21H
+    506	031A  C3			     RET
+    507
+    508	031B			     GUI ENDP
+    509				     ;-------------------------------------------------------------------
+    510
+    511	031B			     PRINTMAS PROC
+    512
+    513	031B  60			     PUSHA
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 10
+v1.ASM
+
+
+
+    514	031C  C6 06 0006r 00		     MOV     COL,0
+    515	0321  8A 26 0003r		     MOV     AH,MASY
+    516	0325  FE CC			     DEC     AH
+    517	0327  88 26 0005r		     MOV     FILA,AH
+    518	032B  C6 06 000Fr B0		     MOV     CAR,176;CARACTER DEL J1
+    519	0330  E8 FE99			     CALL    SETCUR
+    520	0333  E8 FEA7			     CALL    WRITE
+    521	0336  FE 06 0005r		     INC     FILA
+    522	033A  E8 FE8F			     CALL    SETCUR
+    523	033D  E8 FE9D			     CALL    WRITE
+    524	0340  FE 06 0005r		     INC     FILA
+    525	0344  E8 FE85			     CALL    SETCUR
+    526	0347  E8 FE93			     CALL    WRITE
+    527	034A  61			     POPA
+    528	034B  C3			     RET
+    529
+    530	034C			     PRINTMAS ENDP
+    531
+    532				     ;-------------------------------------------------------------------
+    533
+    534	034C			     PRINTSLV PROC
+    535
+    536	034C  60			     PUSHA
+    537	034D  C6 06 0006r 4F		     MOV     COL,79
+    538	0352  8A 26 0004r		     MOV     AH,SLAY
+    539	0356  FE CC			     DEC     AH
+    540	0358  88 26 0005r		     MOV     FILA,AH
+    541	035C  C6 06 000Fr B2		     MOV     CAR,178;CARACTER DEL J1
+    542	0361  E8 FE68			     CALL    SETCUR
+    543	0364  E8 FE76			     CALL    WRITE
+    544	0367  FE 06 0005r		     INC     FILA
+    545	036B  E8 FE5E			     CALL    SETCUR
+    546	036E  E8 FE6C			     CALL    WRITE
+    547	0371  FE 06 0005r		     INC     FILA
+    548	0375  E8 FE54			     CALL    SETCUR
+    549	0378  E8 FE62			     CALL    WRITE
+    550	037B  61			     POPA
+    551	037C  C3			     RET
+    552
+    553	037D			     PRINTSLV ENDP
+    554
+    555				     ;-------------------------------------------------------------------
+    556	037D			     READSLA PROC
+    557	037D  60			     PUSHA
+    558	037E  E8 FD3D			     CALL    READPORT
+    559	0381  8A 26 0016r		     MOV	     AH,DATO
+    560	0385  E8 FD36			     CALL    READPORT
+    561	0388  A0 0016r			     MOV	     AL,DATO
+    562	038B  80 FC 6D			     CMP	     AH,'m'
+    563	038E  75 06			     JNE	     FINREADSLA
+    564	0390  A0 0016r			     MOV	     AL,DATO
+    565	0393  A2 0004r			     MOV	     SLAY,AL
+    566	0396			     FINREADSLA:
+    567	0396  61			     POPA
+    568	0397  C3			     RET
+    569	0398			     READSLA ENDP
+    570
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 11
+v1.ASM
+
+
+
+    571				     ;-------------------------------------------------------------------
+    572	0398			     READMAS PROC
+    573	0398  60			     PUSHA
+    574	0399  E8 FD22			     CALL    READPORT
+    575	039C  8A 26 0016r		     MOV	     AH,DATO
+    576	03A0  E8 FD1B			     CALL    READPORT
+    577	03A3  A0 0016r			     MOV	     AL,DATO
+    578	03A6  80 FC 6D			     CMP	     AH,'m'
+    579	03A9  75 03			     JNE	     FINREADMAS
+    580	03AB  A2 0003r			     MOV	     MASY,AL
+    581	03AE			     FINREADMAS:
+    582	03AE  61			     POPA
+    583	03AF  C3			     RET
+    584	03B0			     READMAS ENDP
+    585
+    586				     ;-------------------------------------------------------------------
+    587
+    588	03B0			     REFRESH PROC
+    589
+    590	03B0  60			     PUSHA
+    591	03B1  C6 06 0006r 00		     MOV     COL,0
+    592	03B6  C6 06 0005r 01		     MOV     FILA,1
+    593	03BB  C6 06 000Fr 20		     MOV     CAR,' '
+    594
+    595	03C0			     BORRCOL1:
+    596	03C0  E8 FE09			     CALL    SETCUR
+    597	03C3  E8 FE17			     CALL    WRITE
+    598	03C6  FE 06 0005r		     INC     FILA
+    599	03CA  80 3E 0005r 19		     CMP     FILA,25
+    600	03CF  75 EF			     JNE     BORRCOL1
+    601
+    602	03D1  C6 06 0005r 01		     MOV     FILA,1
+    603	03D6  C6 06 0006r 4F		     MOV     COL,79
+    604
+    605	03DB			     BORRCOL2:
+    606	03DB  E8 FDEE			     CALL    SETCUR
+    607	03DE  E8 FDFC			     CALL    WRITE
+    608	03E1  FE 06 0005r		     INC     FILA
+    609	03E5  80 3E 0005r 19		     CMP     FILA,25
+    610	03EA  75 EF			     JNE     BORRCOL2
+    611
+    612	03EC  E8 FF2C			     CALL    PRINTMAS
+    613	03EF  E8 FF5A			     CALL    PRINTSLV
+    614
+    615	03F2  61			     POPA
+    616	03F3  C3			     RET
+    617
+    618	03F4			     REFRESH ENDP
+    619
+    620				     ;-------------------------------------------------------------------
+    621
+    622	03F4			     PRINTPEL PROC
+    623
+    624	03F4  60			     PUSHA
+    625	03F5  80 3E 000Er 01		     CMP	     GAMEO,1
+    626	03FA  74 1B			     JE		     FINPRINTPEL
+    627	03FC  8A 26 0001r		     MOV	     AH,PELX
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 12
+v1.ASM
+
+
+
+    628	0400  88 26 0006r		     MOV	     COL,AH
+    629	0404  8A 26 0002r		     MOV	     AH,PELY
+    630	0408  88 26 0005r		     MOV	     FILA,AH
+    631	040C  C6 06 000Fr 07		     MOV	     CAR,7
+    632	0411  E8 FDB8			     CALL    SETCUR
+    633	0414  E8 FDC6			     CALL    WRITE
+    634	0417			     FINPRINTPEL:
+    635	0417  61			     POPA
+    636	0418  C3			     RET
+    637
+    638	0419			     PRINTPEL ENDP
+    639				     ;-------------------------------------------------------------------
+    640
+    641	0419			     BORRPEL PROC
+    642
+    643	0419  60			     PUSHA
+    644	041A  8A 26 0001r		     MOV     AH,PELX
+    645	041E  88 26 0006r		     MOV     COL,AH
+    646	0422  8A 26 0002r		     MOV     AH,PELY
+    647	0426  88 26 0005r		     MOV     FILA,AH
+    648	042A  C6 06 000Fr 20		     MOV     CAR,' '
+    649	042F  E8 FD9A			     CALL    SETCUR
+    650	0432  E8 FDA8			     CALL    WRITE
+    651	0435  61			     POPA
+    652	0436  C3			     RET
+    653
+    654	0437			     BORRPEL ENDP
+    655				     ;-------------------------------------------------------------------
+    656
+    657	0437			     MOVMAS PROC
+    658	0437  60			     PUSHA
+    659	0438			     START_MOVMAS:
+    660	0438  80 3E 0015r 48		     CMP     TECLA,48H;ARRIBA
+    661	043D  74 0A			     JE	     UP1
+    662	043F  80 3E 0015r 50		     CMP     TECLA,50H;ARRIBA
+    663	0444  74 11			     JE	     DOWN1
+    664	0446  EB 1D 90			     JMP     FINMOVMAS
+    665	0449			     UP1:
+    666	0449  80 3E 0003r 02		     CMP     MASY,2
+    667	044E  74 15			     JE	     FINMOVMAS
+    668	0450  FE 0E 0003r		     DEC     MASY
+    669	0454  EB 0F 90			     JMP     FINMOVMAS
+    670	0457			     DOWN1:
+    671	0457  80 3E 0003r 17		     CMP     MASY,23
+    672	045C  74 07			     JE	     FINMOVMAS
+    673	045E  FE 06 0003r		     INC     MASY
+    674	0462  EB 01 90			     JMP     FINMOVMAS
+    675
+    676	0465			     FINMOVMAS:
+    677	0465  61			     POPA
+    678	0466  C3			     RET
+    679	0467			     MOVMAS ENDP
+    680
+    681				     ;-------------------------------------------------------------------
+    682	0467			     MOVSLV PROC
+    683	0467  60			     PUSHA
+    684
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 13
+v1.ASM
+
+
+
+    685	0468			     START_MOVSLV:
+    686	0468  80 3E 0015r 48		     CMP     TECLA,48H;ARRIBA
+    687	046D  74 0A			     JE	     UP2
+    688	046F  80 3E 0015r 50		     CMP     TECLA,50H;ARRIBA
+    689	0474  74 11			     JE	     DOWN2
+    690	0476  EB 1D 90			     JMP     FINMOVSLV
+    691	0479			     UP2:
+    692	0479  80 3E 0004r 02		     CMP     SLAY,2
+    693	047E  74 15			     JE	     FINMOVSLV
+    694	0480  FE 0E 0004r		     DEC     SLAY
+    695	0484  EB 0F 90			     JMP     FINMOVSLV
+    696	0487			     DOWN2:
+    697	0487  80 3E 0004r 17		     CMP     SLAY,23
+    698	048C  74 07			     JE	     FINMOVSLV
+    699	048E  FE 06 0004r		     INC     SLAY
+    700	0492  EB 01 90			     JMP     FINMOVSLV
+    701
+    702	0495			     FINMOVSLV:
+    703	0495  61			     POPA
+    704	0496  C3			     RET
+    705	0497			     MOVSLV ENDP
+    706				     ;-------------------------------------------------------------------
+    707	0497			     TXMAS PROC
+    708	0497  60			     PUSHA
+    709	0498  C6 06 0016r 6D		     MOV	     DATO,'m'
+    710	049D  E8 FD1A			     CALL    WRITEPORT
+    711	04A0  A0 0003r			     MOV	     AL,MASY
+    712	04A3  A2 0016r			     MOV	     DATO,AL
+    713	04A6  E8 FD11			     CALL    WRITEPORT
+    714	04A9  61			     POPA
+    715	04AA  C3			     RET
+    716	04AB			     TXMAS ENDP
+    717				     ;-------------------------------------------------------------------
+    718	04AB			     TXSLA PROC
+    719	04AB  60			     PUSHA
+    720	04AC  C6 06 0016r 6D		     MOV	     DATO,'m'
+    721	04B1  E8 FD06			     CALL    WRITEPORT
+    722	04B4  A0 0004r			     MOV	     AL,SLAY
+    723	04B7  A2 0016r			     MOV	     DATO,AL
+    724	04BA  E8 FCFD			     CALL    WRITEPORT
+    725	04BD  61			     POPA
+    726	04BE  C3			     RET
+    727	04BF			     TXSLA ENDP
+    728				     ;-------------------------------------------------------------------
+    729	04BF			     TXPEL PROC
+    730	04BF  60			     PUSHA
+    731	04C0  C6 06 0016r 70		     MOV	     DATO,'p'
+    732	04C5  E8 FCF2			     CALL    WRITEPORT
+    733	04C8  A0 0001r			     MOV	     AL,PELX
+    734	04CB  A2 0016r			     MOV	     DATO,AL
+    735	04CE  E8 FCE9			     CALL    WRITEPORT
+    736	04D1  A0 0002r			     MOV	     AL,PELY
+    737	04D4  A2 0016r			     MOV	     DATO,AL
+    738	04D7  E8 FCE0			     CALL    WRITEPORT
+    739	04DA  61			     POPA
+    740	04DB  C3			     RET
+    741	04DC			     TXPEL ENDP
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 14
+v1.ASM
+
+
+
+    742				     ;-------------------------------------------------------------------
+    743
+    744	04DC			     MOVPEL PROC
+    745				     ;3	      2
+    746				     ;	  *
+    747				     ;4	      1
+    748
+    749	04DC  60			     PUSHA
+    750
+    751	04DD			     START_MOVPEL:
+    752	04DD  E8 FD46			     CALL    DELAY
+    753
+    754	04E0  E8 FF36			     CALL    BORRPEL
+    755	04E3  80 3E 000Ar 01		     CMP	     DIR,1
+    756	04E8  74 15			     JE		     MOV_D1
+    757	04EA  80 3E 000Ar 02		     CMP	     DIR,2
+    758	04EF  74 19			     JE		     MOV_D2
+    759	04F1  80 3E 000Ar 03		     CMP	     DIR,3
+    760	04F6  74 1D			     JE		     MOV_D3
+    761	04F8  80 3E 000Ar 04		     CMP	     DIR,4
+    762	04FD  74 21			     JE		     MOV_D4
+    763	04FF			     MOV_D1:
+    764	04FF  FE 06 0002r		     INC	     PELY
+    765	0503  FE 06 0001r		     INC	     PELX
+    766	0507  EB 22 90			     JMP	     FINMOVPEL
+    767	050A			     MOV_D2:
+    768	050A  FE 0E 0002r		     DEC	     PELY
+    769	050E  FE 06 0001r		     INC	     PELX
+    770	0512  EB 17 90			     JMP	     FINMOVPEL
+    771	0515			     MOV_D3:
+    772	0515  FE 0E 0002r		     DEC	     PELY
+    773	0519  FE 0E 0001r		     DEC	     PELX
+    774	051D  EB 0C 90			     JMP	     FINMOVPEL
+    775	0520			     MOV_D4:
+    776	0520  FE 06 0002r		     INC	     PELY
+    777	0524  FE 0E 0001r		     DEC	     PELX
+    778	0528  EB 01 90			     JMP	     FINMOVPEL
+    779
+    780	052B			     FINMOVPEL:
+    781	052B  E8 000B			     CALL    REBOTE
+    782	052E  E8 FEC3			     CALL    PRINTPEL
+    783	0531  E8 FF8B			     CALL    TXPEL
+    784	0534  E8 01CB			     CALL    SCORE
+    785	0537  61			     POPA
+    786	0538  C3			     RET
+    787	0539			     MOVPEL ENDP
+    788
+    789				     ;-------------------------------------------------------------------
+    790	0539			     REBOTE PROC
+    791	0539  60			     PUSHA
+    792	053A  A0 0001r			     MOV	     AL,PELX
+    793	053D  A2 0006r			     MOV	     COL,AL
+    794	0540  A0 0002r			     MOV	     AL,PELY
+    795	0543  A2 0005r			     MOV	     FILA,AL
+    796	0546  E8 FC83			     CALL    SETCUR
+    797	0549  80 3E 000Ar 01		     CMP	     DIR,1
+    798	054E  74 1B			     JE		     REB_D1
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 15
+v1.ASM
+
+
+
+    799	0550  80 3E 000Ar 02		     CMP	     DIR,2
+    800	0555  74 5A			     JE		     REB_D2
+    801	0557  80 3E 000Ar 03		     CMP	     DIR,3
+    802	055C  75 03			     JNE	     S7
+    803	055E  E9 0096			     JMP	     REB_D3
+    804	0561			     S7:
+    805	0561  80 3E 000Ar 04		     CMP	     DIR,4
+    806	0566  75 03			     JNE	     S5
+    807	0568  E9 00D2			     JMP	     REB_D4
+    808	056B			     S5:
+    809	056B			     REB_D1:
+    810	056B  80 3E 0001r 4F		     CMP	     PELX,79
+    811	0570  75 25			     JNE	     D1
+    812	0572  A0 0004r			     MOV	     AL,SLAY
+    813	0575  38 06 0002r		     CMP	     PELY,AL
+    814	0579  74 13			     JE		     SLA_UP1 ;PEGO ARRIBA
+    815	057B  FE C0			     INC	     AL
+    816	057D  38 06 0002r		     CMP	     PELY,AL
+    817	0581  74 0E			     JE		     SLA_MID1	     ;PEGO MEDIO
+    818	0583  FE C0			     INC	     AL
+    819	0585  38 06 0002r		     CMP	     PELY,AL
+    820	0589  74 09			     JE		     SLA_DOWN1;PEGO ABAJO
+    821	058B  E9 0172			     JMP	     FINREB
+    822	058E			     SLA_UP1:
+    823	058E  E9 015F			     JMP	     CHGDIR4MS
+    824	0591			     SLA_MID1:
+    825	0591  E9 015C			     JMP	     CHGDIR4MS
+    826	0594			     SLA_DOWN1:
+    827	0594  E9 0159			     JMP	     CHGDIR4MS
+    828	0597			     D1:
+    829	0597  80 3E 0002r 19		     CMP	     PELY,25
+    830	059C  75 03			     JNE	     S6
+    831	059E  E9 00EF			     JMP	     CHGDIR2
+    832	05A1			     S6:
+    833	05A1  E8 FC78			     CALL    READCHAR
+    834	05A4  80 3E 0010r 58		     CMP	     ASC,'X'
+    835	05A9  75 03			     JNE	     S9
+    836	05AB  E9 0142			     JMP	     CHGDIR4MS
+    837	05AE			     S9:
+    838	05AE  E9 014F			     JMP	     FINREB
+    839	05B1			     REB_D2:
+    840	05B1  80 3E 0001r 4F		     CMP	     PELX,79
+    841	05B6  75 25			     JNE	     D2
+    842	05B8  A0 0004r			     MOV	     AL,SLAY
+    843	05BB  38 06 0002r		     CMP	     PELY,AL
+    844	05BF  74 13			     JE		     SLA_UP2 ;PEGO ARRIBA
+    845	05C1  FE C0			     INC	     AL
+    846	05C3  38 06 0002r		     CMP	     PELY,AL
+    847	05C7  74 0E			     JE		     SLA_MID2	     ;PEGO MEDIO
+    848	05C9  FE C0			     INC	     AL
+    849	05CB  38 06 0002r		     CMP	     PELY,AL
+    850	05CF  74 09			     JE		     SLA_DOWN2;PEGO ABAJO
+    851	05D1  E9 012C			     JMP	     FINREB
+    852	05D4			     SLA_UP2:
+    853	05D4  E9 0109			     JMP	     CHGDIR3MS
+    854	05D7			     SLA_MID2:
+    855	05D7  E9 0106			     JMP	     CHGDIR3MS
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 16
+v1.ASM
+
+
+
+    856	05DA			     SLA_DOWN2:
+    857	05DA  E9 0103			     JMP	     CHGDIR3MS
+    858
+    859	05DD			     D2:
+    860	05DD  80 3E 0002r 00		     CMP	     PELY,0
+    861	05E2  75 03			     JNE	     S10
+    862	05E4  E9 0099			     JMP	     CHGDIR1
+    863	05E7			     S10:
+    864	05E7  E8 FC32			     CALL    READCHAR
+    865	05EA  80 3E 0010r 58		     CMP	     ASC,'X'
+    866	05EF  74 03			     JE		     S11
+    867	05F1  E9 010C			     JMP	     FINREB
+    868	05F4			     S11:
+    869	05F4  E9 00E9			     JMP	     CHGDIR3MS
+    870	05F7			     REB_D3:
+    871	05F7  80 3E 0001r 00		     CMP	     PELX,0
+    872	05FC  75 25			     JNZ	     D3
+    873	05FE  A0 0003r			     MOV	     AL,MASY
+    874	0601  38 06 0002r		     CMP	     PELY,AL
+    875	0605  74 13			     JE		     MAS_UP1 ;PEGO ARRIBA
+    876	0607  FE C0			     INC	     AL
+    877	0609  38 06 0002r		     CMP	     PELY,AL
+    878	060D  74 0E			     JE		     MAS_MID1	     ;PEGO MEDIO
+    879	060F  FE C0			     INC	     AL
+    880	0611  38 06 0002r		     CMP	     PELY,AL
+    881	0615  74 09			     JE		     MAS_DOWN1;PEGO ABAJO
+    882	0617  E9 00E6			     JMP	     FINREB
+    883	061A			     MAS_UP1:
+    884	061A  E9 00B3			     JMP	     CHGDIR2MS
+    885	061D			     MAS_MID1:
+    886	061D  E9 00B0			     JMP	     CHGDIR2MS
+    887	0620			     MAS_DOWN1:
+    888	0620  E9 00AD			     JMP	     CHGDIR2MS
+    889
+    890	0623			     D3:
+    891	0623  80 3E 0002r 00		     CMP	     PELY,0
+    892	0628  75 03			     JNE	     S13
+    893	062A  E9 0083			     JMP	     CHGDIR4
+    894	062D			     S13:
+    895	062D  E8 FBEC			     CALL    READCHAR
+    896	0630  80 3E 0010r 58		     CMP	     ASC,'X'
+    897	0635  74 03			     JE		     S12
+    898	0637  E9 00C6			     JMP	     FINREB
+    899	063A			     S12:
+    900	063A  E9 0093			     JMP	     CHGDIR2MS
+    901	063D			     REB_D4:
+    902	063D  80 3E 0001r 00		     CMP	     PELX,0
+    903	0642  75 25			     JNZ	     D4
+    904	0644  A0 0003r			     MOV	     AL,MASY
+    905	0647  38 06 0002r		     CMP	     PELY,AL
+    906	064B  74 13			     JE		     MAS_UP2 ;PEGO ARRIBA
+    907	064D  FE C0			     INC	     AL
+    908	064F  38 06 0002r		     CMP	     PELY,AL
+    909	0653  74 0E			     JE		     MAS_MID2	     ;PEGO MEDIO
+    910	0655  FE C0			     INC	     AL
+    911	0657  38 06 0002r		     CMP	     PELY,AL
+    912	065B  74 09			     JE		     MAS_DOWN2;PEGO ABAJO
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 17
+v1.ASM
+
+
+
+    913	065D  E9 00A0			     JMP	     FINREB
+    914	0660			     MAS_UP2:
+    915	0660  EB 5E 90			     JMP	     CHGDIR1MS
+    916	0663			     MAS_MID2:
+    917	0663  EB 5B 90			     JMP	     CHGDIR1MS
+    918	0666			     MAS_DOWN2:
+    919	0666  EB 58 90			     JMP	     CHGDIR1MS
+    920	0669			     D4:
+    921	0669  80 3E 0002r 19		     CMP	     PELY,25
+    922	066E  74 30			     JE		     CHGDIR3
+    923	0670  E8 FBA9			     CALL    READCHAR
+    924	0673  80 3E 0010r 58		     CMP	     ASC,'X'
+    925	0678  74 03			     JE		     S14
+    926	067A  E9 0083			     JMP	     FINREB
+    927	067D			     S14:
+    928	067D  EB 41 90			     JMP	     CHGDIR1MS
+    929	0680			     CHGDIR1:
+    930	0680  C6 06 000Ar 01		     MOV	     DIR,1
+    931	0685  FE 06 0002r		     INC	     PELY
+    932	0689  FE 06 0002r		     INC	     PELY
+    933	068D  EB 71 90			     JMP	     FINREB
+    934	0690			     CHGDIR2:
+    935	0690  C6 06 000Ar 02		     MOV	     DIR,2
+    936	0695  FE 0E 0002r		     DEC	     PELY
+    937	0699  FE 0E 0002r		     DEC	     PELY
+    938	069D  EB 61 90			     JMP	     FINREB
+    939	06A0			     CHGDIR3:
+    940	06A0  C6 06 000Ar 03		     MOV	     DIR,3
+    941	06A5  FE 0E 0002r		     DEC	     PELY
+    942	06A9  FE 0E 0002r		     DEC	     PELY
+    943	06AD  EB 51 90			     JMP	     FINREB
+    944	06B0			     CHGDIR4:
+    945	06B0  C6 06 000Ar 04		     MOV	     DIR,4
+    946	06B5  FE 06 0002r		     INC	     PELY
+    947	06B9  FE 06 0002r		     INC	     PELY
+    948	06BD  EB 41 90			     JMP	     FINREB
+    949	06C0			     CHGDIR1MS:
+    950	06C0  C6 06 000Ar 01		     MOV	     DIR,1
+    951	06C5  FE 06 0001r		     INC	     PELX
+    952	06C9  FE 06 0001r		     INC	     PELX
+    953	06CD  EB 31 90			     JMP	     FINREB
+    954	06D0			     CHGDIR2MS:
+    955	06D0  C6 06 000Ar 02		     MOV	     DIR,2
+    956	06D5  FE 06 0001r		     INC	     PELX
+    957	06D9  FE 06 0001r		     INC	     PELX
+    958	06DD  EB 21 90			     JMP	     FINREB
+    959	06E0			     CHGDIR3MS:
+    960	06E0  C6 06 000Ar 03		     MOV	     DIR,3
+    961	06E5  FE 0E 0001r		     DEC	     PELX
+    962	06E9  FE 0E 0001r		     DEC	     PELX
+    963	06ED  EB 11 90			     JMP	     FINREB
+    964	06F0			     CHGDIR4MS:
+    965	06F0  C6 06 000Ar 04		     MOV	     DIR,4
+    966	06F5  FE 0E 0001r		     DEC	     PELX
+    967	06F9  FE 0E 0001r		     DEC	     PELX
+    968	06FD  EB 01 90			     JMP	     FINREB
+    969
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 18
+v1.ASM
+
+
+
+    970	0700			     FINREB:
+    971	0700  61			     POPA
+    972	0701  C3			     RET
+    973	0702			     REBOTE ENDP
+    974				     ;-------------------------------------------------------------------
+    975	0702			     SCORE PROC
+    976	0702  60			     PUSHA
+    977	0703  80 3E 0001r 00		     CMP	     PELX,0
+    978	0708  74 31			     JE		     GOL_SLV
+    979	070A  80 3E 0001r 50		     CMP	     PELX,80
+    980	070F  74 03			     JE		     GOL_MAS
+    981	0711  E9 00A0			     JMP	     FINSCORE
+    982	0714			     GOL_MAS:
+    983	0714  80 3E 000Cr 39		     CMP	     PUNTM,57;48 AL 57 NUMEROS
+    984	0719  74 47			     JE		     GAMEOVER
+    985	071B  FE 06 000Cr		     INC	     PUNTM
+    986	071F  A0 000Cr			     MOV	     AL,PUNTM
+    987	0722  A2 000Fr			     MOV	     CAR,AL
+    988	0725  C6 06 0006r 28		     MOV	     COL,40
+    989	072A  C6 06 0005r 00		     MOV	     FILA,0
+    990	072F  E8 FA9A			     CALL    SETCUR
+    991	0732  E8 FAA8			     CALL    WRITE
+    992	0735  E8 007E			     CALL    RESET
+    993	0738  EB 7A 90			     JMP	     FINSCORE
+    994	073B			     GOL_SLV:
+    995	073B  80 3E 000Dr 39		     CMP	     PUNTS,57;48 AL 57 NUMEROS
+    996	0740  74 20			     JE		     GAMEOVER
+    997	0742  FE 06 000Dr		     INC	     PUNTS
+    998	0746  A0 000Dr			     MOV	     AL,PUNTS
+    999	0749  A2 000Fr			     MOV	     CAR,AL
+   1000	074C  C6 06 0006r 30		     MOV	     COL,48
+   1001	0751  C6 06 0005r 00		     MOV	     FILA,0
+   1002	0756  E8 FA73			     CALL    SETCUR
+   1003	0759  E8 FA81			     CALL    WRITE
+   1004	075C  E8 0057			     CALL    RESET
+   1005	075F  EB 53 90			     JMP	     FINSCORE
+   1006	0762			     GAMEOVER:
+   1007	0762  E8 FACE			     CALL    CLRSCR
+   1008	0765  C6 06 0006r 1F		     MOV	     COL,31
+   1009	076A  C6 06 0005r 0C		     MOV	     FILA,12
+   1010	076F  E8 FA5A			     CALL    SETCUR
+   1011	0772  BA 0097r			     LEA	     DX,MSG3
+   1012	0775  B4 09			     MOV	     AH,9H
+   1013	0777  CD 21			     INT	     21H
+   1014	0779  C6 06 000Er 01		     MOV	     GAMEO,1
+   1015	077E  C6 06 0006r 21		     MOV	     COL,33
+   1016	0783  C6 06 0005r 0D		     MOV	     FILA,13
+   1017	0788  E8 FA41			     CALL    SETCUR
+   1018	078B  BA 00A8r			     LEA	     DX,MSG4
+   1019	078E  B4 09			     MOV	     AH,9H
+   1020	0790  CD 21			     INT	     21H
+   1021	0792  80 3E 000Cr 39		     CMP	     PUNTM,57
+   1022	0797  74 07			     JE		     GANOMAS
+   1023	0799  80 3E 000Cr 39		     CMP	     PUNTM,57
+   1024	079E  74 0A			     JE		     GANOSLV
+   1025	07A0			     GANOMAS:
+   1026	07A0  BA 008Ar			     LEA	     DX,MSG1
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 19
+v1.ASM
+
+
+
+   1027	07A3  B4 09			     MOV	     AH,9H
+   1028	07A5  CD 21			     INT	     21H
+   1029	07A7  EB 0B 90			     JMP	     FINSCORE
+   1030	07AA			     GANOSLV:
+   1031	07AA  BA 008Ar			     LEA	     DX,MSG1
+   1032	07AD  B4 09			     MOV	     AH,9H
+   1033	07AF  CD 21			     INT	     21H
+   1034	07B1  EB 01 90			     JMP	     FINSCORE
+   1035	07B4			     FINSCORE:
+   1036	07B4  61			     POPA
+   1037	07B5  C3			     RET
+   1038	07B6			     SCORE ENDP
+   1039
+   1040				     ;-------------------------------------------------------------------
+   1041	07B6			     RESET PROC
+   1042	07B6  60			     PUSHA
+   1043
+   1044	07B7  C6 06 000Ar 01		     MOV	     DIR,1
+   1045	07BC  C6 06 0009r 01		     MOV	     ESTADO,1
+   1046	07C1  C6 06 0004r 0C		     MOV	     SLAY,12
+   1047	07C6  C6 06 0003r 0C		     MOV	     MASY,12
+   1048	07CB  C6 06 0001r 28		     MOV	     PELX,40
+   1049	07D0  C6 06 0002r 0C		     MOV	     PELY,12
+   1050	07D5  E8 FC1C			     CALL    PRINTPEL
+   1051	07D8  E8 FBD5			     CALL    REFRESH
+   1052	07DB  61			     POPA
+   1053	07DC  C3			     RET
+   1054	07DD			     RESET ENDP
+   1055
+   1056				     ;-------------------------------------------------------------------
+   1057	07DD			     CODESG ENDS
+   1058
+   1059				     END BEGIN
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 20
+Symbol Table
+
+
+
+
+Symbol Name		Type   Value			   Cref	(defined at #)
+
+??DATE			Text   "27/05/11"
+??FILENAME		Text   "v1	"
+??TIME			Text   "00:43:39"
+??VERSION		Number 030A
+@CPU			Text   0707H			   #2
+@CURSEG			Text   CODESG			   #5  #13  #81
+@FILENAME		Text   V1
+@WORDSIZE		Text   2			   #2  #5  #13	#81
+ASC			Byte   DATASG:0010		   #36	123  128  151  155  160	 366  378  391	834  865  896  924
+B1			Near   CODESG:0229		   #400	 407
+B2			Near   CODESG:022C		   #402	 404
+B3			Near   CODESG:022F		   #405
+BEGIN			Near   CODESG:0000		   #83	1059
+BORR			Near   CODESG:0242		   #417	 424  428
+BORRAR			Near   CODESG:01EC		   #339
+BORRCOL1		Near   CODESG:03C0		   #595	 600
+BORRCOL2		Near   CODESG:03DB		   #605	 610
+BORRPEL			Near   CODESG:0419		   241	#641  754
+BUCLE			Near   CODESG:0022		   #100	 118  129  133	153  157
+BUFFER			Byte   DATASG:0023		   #47	449  456  459
+BYTESREAD		Word   DATASG:0074		   #48	447
+CAR			Byte   DATASG:000F		   #35	328  416  493  518  541	 593  631  648	987  999
+CENTRO			Near   CODESG:0306		   #499
+CHGDIR1			Near   CODESG:0680		   862	#929
+CHGDIR1MS		Near   CODESG:06C0		   915	917  919  928  #949
+CHGDIR2			Near   CODESG:0690		   831	#934
+CHGDIR2MS		Near   CODESG:06D0		   884	886  888  900  #954
+CHGDIR3			Near   CODESG:06A0		   922	#939
+CHGDIR3MS		Near   CODESG:06E0		   853	855  857  869  #959
+CHGDIR4			Near   CODESG:06B0		   893	#944
+CHGDIR4MS		Near   CODESG:06F0		   823	825  827  836  #964
+CLRSCR			Near   CODESG:0233		   93  #412  1007
+COL			Byte   DATASG:0006		   #24	313  415  419  422  423	 425  430  444	481  490  496  497  500	  +
+							   514	537  591  603  628  645	 793  988  1000	 1008  1015
+COM1			Number 03F8			   #51	176  290
+CONT			Byte   DATASG:000B		   #30
+C_BORR			Byte   DATASG:0014		   #40
+C_JUG1			Byte   DATASG:0012		   #38
+C_JUG2			Byte   DATASG:0013		   #39
+C_PEL			Byte   DATASG:0011		   #37
+D1			Near   CODESG:0597		   811	#828
+D2			Near   CODESG:05DD		   841	#859
+D3			Near   CODESG:0623		   872	#890
+D4			Near   CODESG:0669		   903	#920
+DATO			Byte   DATASG:0016		   #42	130  178  184  187  199	 207  223  229	237  247  254  291  559	  +
+							   561	564  575  577  709  712	 720  723  731	734  737
+DELAY			Near   CODESG:0226		   105	110  111  112  #398  752
+DIR			Byte   DATASG:000A		   #29	755  757  759  761  797	 799  801  805	930  935  940  945  950	  +
+							   955	960  965  1044
+DOWN1			Near   CODESG:0457		   663	#670
+DOWN2			Near   CODESG:0487		   689	#696
+EST1			Near   CODESG:010B		   183	#204
+EST2			Near   CODESG:0124		   206	#216
+EST2_MAS		Near   CODESG:0135		   220	#222
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 21
+Symbol Table
+
+
+
+EST2_SLV		Near   CODESG:0146		   221	#228
+EST3			Near   CODESG:0157		   209	218  #234
+EST4			Near   CODESG:0173		   236	#244
+EST5			Near   CODESG:0188		   246	#251
+ESTADO			Byte   DATASG:0009		   #28	108  126  135  181  194	 201  205  214	217  226  232  235  242	  +
+							   245	249  252  256  1045
+ESTADO1			Near   CODESG:0075		   127	#134
+ESTADO2			Near   CODESG:00A5		   136	#154
+FCR			Number 03FA			   #54	281
+FILA			Byte   DATASG:0005		   #23	312  414  418  426  427	 429  443  462	463  480  491  501  517	  +
+							   521	524  540  544  547  592	 598  599  602	608  609  630  647  795	  +
+							   989	1001  1009  1016
+FILEHANDLE		Word   DATASG:0021		   #46	441  448  468
+FILENAME		Byte   DATASG:0017		   #44	439
+FILESIZE		Dword  DATASG:0076		   #49
+FINEST1			Near   CODESG:011C		   208	#212
+FINEST3			Near   CODESG:0168		   238	#240
+FINEST5			Near   CODESG:01A0		   #265
+FINESTADO1		Near   CODESG:0098		   144	148  #149
+FINGETKEY		Near   CODESG:020C		   362	#367
+FINLEO			Near   CODESG:02C3		   #467
+FINMOVMAS		Near   CODESG:0465		   664	667  669  672  674  #676
+FINMOVPEL		Near   CODESG:052B		   766	770  774  778  #780
+FINMOVSLV		Near   CODESG:0495		   690	693  695  698  700  #702
+FINOBSTA		Near   CODESG:02D7		   472	#479
+FINOBSTAERR		Near   CODESG:02D0		   442	465  471  #474
+FINPRINTPEL		Near   CODESG:0417		   626	#634
+FINREADCHAR		Near   CODESG:0224		   #392
+FINREADMAS		Near   CODESG:03AE		   579	#581
+FINREADP		Near   CODESG:01A6		   174	189  195  202  215  227	 233  239  243	250  253  267  #269
+FINREADSLA		Near   CODESG:0396		   563	#566
+FINREB			Near   CODESG:0700		   821	838  851  867  882  898	 913  926  933	938  943  948  953  958	  +
+							   963	968  #970
+FINSCORE		Near   CODESG:07B4		   981	993  1005  1029	 1034  #1035
+FINWAITKEY		Near   CODESG:021A		   #379
+GAMEO			Byte   DATASG:000E		   #33	101  625  1014
+GAMEOVER		Near   CODESG:0762		   984	996  #1006
+GANOMAS			Near   CODESG:07A0		   1022	 #1025
+GANOSLV			Near   CODESG:07AA		   1024	 #1030
+GETKEY			Near   CODESG:01FA		   159	#357
+GOL_MAS			Near   CODESG:0714		   980	#982
+GOL_SLV			Near   CODESG:073B		   978	#994
+GUI			Near   CODESG:02E6		   96  #489
+IER			Number 03F9			   #56
+IIR			Number 03FA			   #55
+INICIO			Near   CODESG:000D		   #92
+LCR			Number 03FB			   #52
+LEO			Near   CODESG:0294		   #446	 464
+LSR			Number 03FD			   #53	170  293
+MARCOSUP		Near   CODESG:02F0		   #492	 498
+MASY			Byte   DATASG:0003		   #21	230  515  580  666  668	 671  673  711	873  904  1047
+MAS_DOWN1		Near   CODESG:0620		   881	#887
+MAS_DOWN2		Near   CODESG:0666		   912	#918
+MAS_MID1		Near   CODESG:061D		   878	#885
+MAS_MID2		Near   CODESG:0663		   909	#916
+MAS_SLA			Byte   DATASG:0000		   #17	106  137  193  198  219
+MAS_UP1			Near   CODESG:061A		   875	#883
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 22
+Symbol Table
+
+
+
+MAS_UP2			Near   CODESG:0660		   906	#914
+MCR			Number 03FC			   #57
+MOVMAS			Near   CODESG:0437		   142	#657
+MOVPEL			Near   CODESG:04DC		   113	#744
+MOVSLV			Near   CODESG:0467		   146	#682
+MOV_D1			Near   CODESG:04FF		   756	#763
+MOV_D2			Near   CODESG:050A		   758	#767
+MOV_D3			Near   CODESG:0515		   760	#771
+MOV_D4			Near   CODESG:0520		   762	#775
+MOV_MAS			Near   CODESG:0086		   138	#141
+MOV_SLV			Near   CODESG:008F		   139	#145
+MSG1			Byte   DATASG:008A		   #66	1026  1031
+MSG2			Byte   DATASG:0091		   #67
+MSG3			Byte   DATASG:0097		   #68	1011
+MSG4			Byte   DATASG:00A8		   #71	1018
+MSG5			Byte   DATASG:00AF		   #72	475
+OBSTA			Near   CODESG:0279		   94  #436
+OPENPORT		Near   CODESG:01A8		   95  #274
+PELX			Byte   DATASG:0001		   #19	248  627  644  733  765	 769  773  777	792  810  840  871  902	  +
+							   951	952  956  957  961  962	 966  967  977	979  1048
+PELY			Byte   DATASG:0002		   #20	255  629  646  736  764	 768  772  776	794  813  816  819  829	  +
+							   843	846  849  860  874  877	 880  891  905	908  911  921  931  932	  +
+							   936	937  941  942  946  947	 1049
+PIC			Number 0020			   #59
+PILA			Word   STACKSG:0000		   #7
+PRINTMAS		Near   CODESG:031B		   98  #511  612
+PRINTPEL		Near   CODESG:03F4		   97  257  #622  782  1050
+PRINTSLV		Near   CODESG:034C		   99  #534  613
+PUNT			Byte   DATASG:007A		   #63	503
+PUNTM			Byte   DATASG:000C		   #31	983  985  986  1021  1023
+PUNTS			Byte   DATASG:000D		   #32	995  997  998
+READCHAR		Near   CODESG:021C		   #387	 833  864  895	923
+READMAS			Near   CODESG:0398		   #572
+READPORT		Near   CODESG:00BE		   115	#167  558  560	574  576
+READSLA			Near   CODESG:037D		   #556
+REBOTE			Near   CODESG:0539		   781	#790
+REB_D1			Near   CODESG:056B		   798	#809
+REB_D2			Near   CODESG:05B1		   800	#839
+REB_D3			Near   CODESG:05F7		   803	#870
+REB_D4			Near   CODESG:063D		   807	#901
+REF			Near   CODESG:019D		   #263
+REFRESH			Near   CODESG:03B0		   150	225  231  264  #588  1051
+RESET			Near   CODESG:07B6		   992	1004  #1041
+S1			Near   CODESG:00CA		   173	#175
+S10			Near   CODESG:05E7		   861	#863
+S11			Near   CODESG:05F4		   866	#868
+S12			Near   CODESG:063A		   897	#899
+S13			Near   CODESG:062D		   892	#894
+S14			Near   CODESG:067D		   925	#927
+S2			Near   CODESG:0049		   107	109  #114
+S4			Near   CODESG:002C		   102	#104
+S5			Near   CODESG:056B		   806	#808
+S6			Near   CODESG:05A1		   830	#832
+S7			Near   CODESG:0561		   802	#804
+S9			Near   CODESG:05AE		   835	#837
+SALIR			Near   CODESG:00AF		   103	152  156  #158	161
+SCORE			Near   CODESG:0702		   266	784  #975
+Turbo Assembler	 Version 3.1	    27/05/11 00:43:39	    Page 23
+Symbol Table
+
+
+
+SCRMAS			Byte   DATASG:0007		   #25
+SCRSLV			Byte   DATASG:0008		   #26
+SETCUR			Near   CODESG:01CC		   #307	 420  431  445	482  494  502  519  522	 525  542  545	548  596  +
+							   606	632  649  796  990  1002  1010	1017
+SLAY			Byte   DATASG:0004		   #22	224  538  565  692  694	 697  699  722	812  842  1046
+SLA_DOWN1		Near   CODESG:0594		   820	#826
+SLA_DOWN2		Near   CODESG:05DA		   850	#856
+SLA_MID1		Near   CODESG:0591		   817	#824
+SLA_MID2		Near   CODESG:05D7		   847	#854
+SLA_UP1			Near   CODESG:058E		   814	#822
+SLA_UP2			Near   CODESG:05D4		   844	#852
+SOYMAS			Near   CODESG:00E9		   188	#192
+SOYSLV			Near   CODESG:00F6		   185	#197
+START_MOVMAS		Near   CODESG:0438		   #659
+START_MOVPEL		Near   CODESG:04DD		   #751
+START_MOVSLV		Near   CODESG:0468		   #685
+TECLA			Byte   DATASG:0015		   #41	124  365  377  660  662	 686  688
+TXMAS			Near   CODESG:0497		   143	#707
+TXPEL			Near   CODESG:04BF		   #729	 783
+TXSLA			Near   CODESG:04AB		   147	#718
+UP1			Near   CODESG:0449		   661	#665
+UP2			Near   CODESG:0479		   687	#691
+WAITKEY			Near   CODESG:020E		   #373
+WRITE			Near   CODESG:01DD		   #323	 421  495  520	523  526  543  546  549	 597  607  633	650  991  +
+							   1003
+WRITEP			Near   CODESG:01C6		   #295	 297
+WRITEPORT		Near   CODESG:01BA		   131	200  #288  710	713  721  724  732  735	 738
+
+Groups & Segments	Bit Size Align	Combine	Class	   Cref	(defined at #)
+
+CODESG			16  07DD Para	none		   #81	85
+DATASG			16  00CC Para	none		   #13	85  86
+STACKSG			16  1FFE Para	none		   #5  85
+
